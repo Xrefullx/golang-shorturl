@@ -1,51 +1,90 @@
 package handlers
 
 import (
-	"fmt"
-	"github.com/Xrefullx/golang-shorturl/internal/storage"
+	"encoding/json"
+	"github.com/go-chi/chi/v5"
 	"io"
 	"net/http"
-	"unicode/utf8"
 )
 
 type Handler struct {
-	DB storage.URLStore
+	sUrl    URLStore
+	baseUrl string
 }
 
-func trimFirstRune(s string) string {
-	_, i := utf8.DecodeRuneInString(s)
-	return s[i:]
+func CreateHandler(sUrl URLStore, baseUrl string) *Handler {
+	return &Handler{
+		sUrl:    sUrl,
+		baseUrl: baseUrl,
+	}
 }
 
-func (h *Handler) CheckRequestHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		q := trimFirstRune(r.URL.Path)
-		long, err := h.DB.Get(q)
-		if err != nil {
-			h.badRequestError(w)
-		}
-		w.Header().Set("Location", long)
-		w.WriteHeader(http.StatusTemporaryRedirect)
-
+func (h *Handler) JsonSave(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.badRequestError(w, "Only Post")
 		return
 	}
-
-	if r.Method == http.MethodPost {
-		long, err := io.ReadAll(r.Body)
-		if err != nil {
-			h.badRequestError(w)
-		}
-		short, err := h.DB.Save(string(long))
-		if err != nil {
-			h.badRequestError(w)
-		}
-		w.WriteHeader(http.StatusCreated)
-		fmt.Fprint(w, "http://localhost:8080/"+short)
+	jsonBody, err := io.ReadAll(r.Body)
+	if err != nil {
+		h.badRequestError(w, err.Error())
 		return
 	}
-	http.Error(w, "GET and POST", http.StatusBadRequest)
+	defer r.Body.Close()
+
+	jsonmap := make(map[string]string)
+	if err := json.Unmarshal(jsonBody, &jsonmap); err != nil {
+		h.badRequestError(w, "check json")
+		return
+	}
+	searchUrl := jsonmap["url"]
+	short, err := h.sUrl.Save(string(searchUrl))
+	if err != nil {
+		h.badRequestError(w, err.Error())
+	}
+	jsonResult, err := json.Marshal(struct {
+		result string `json:"result"`
+	}{result: h.baseUrl + "/" + short})
+	if err != nil {
+		h.serverError(w, err.Error())
+		return
+	}
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	w.Write(jsonResult)
 }
 
-func (h *Handler) badRequestError(w http.ResponseWriter) {
-	http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusInternalServerError)
+func (h *Handler) SaveHandler(w http.ResponseWriter, r *http.Request) {
+	search, err := io.ReadAll(r.Body)
+	if err != nil {
+		h.badRequestError(w, err.Error())
+		return
+	}
+	defer r.Body.Close()
+
+	short, err := h.sUrl.Save(string(search))
+	if err != nil {
+		h.badRequestError(w, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(h.baseUrl + "/" + short))
+}
+
+func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
+	short := chi.URLParam(r, "short")
+	long, err := h.sUrl.Get(short)
+	if err != nil {
+		h.badRequestError(w, err.Error())
+		return
+	}
+	w.Header().Set("Location", long)
+	w.WriteHeader(http.StatusTemporaryRedirect)
+}
+
+func (h *Handler) serverError(w http.ResponseWriter, err string) {
+	http.Error(w, err, http.StatusInternalServerError)
+}
+
+func (h *Handler) badRequestError(w http.ResponseWriter, err string) {
+	http.Error(w, err, http.StatusInternalServerError)
 }

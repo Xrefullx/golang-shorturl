@@ -1,8 +1,9 @@
-package storage
+package memory
 
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"sync"
 	"testing"
 )
 
@@ -22,6 +23,7 @@ func TestMaps_Get(t *testing.T) {
 			mp: Maps{urlMap: map[string]string{
 				"test": "https://ya.ru",
 			},
+				mutex: &sync.RWMutex{},
 			},
 			testbody: body{short: ""},
 			err:      true,
@@ -31,6 +33,7 @@ func TestMaps_Get(t *testing.T) {
 			mp: Maps{urlMap: map[string]string{
 				"test": "https://ya.ru",
 			},
+				mutex: &sync.RWMutex{},
 			},
 			testbody:     body{short: "test123"},
 			shouldReturn: "",
@@ -41,6 +44,7 @@ func TestMaps_Get(t *testing.T) {
 			mp: Maps{urlMap: map[string]string{
 				"test": "https://ya.ru",
 			},
+				mutex: &sync.RWMutex{},
 			},
 			testbody:     body{short: "test123"},
 			shouldReturn: "",
@@ -75,7 +79,7 @@ func TestMaps_Save(t *testing.T) {
 			testNumber: "1",
 			mp: Maps{urlMap: map[string]string{
 				"test": "https://ya.ru",
-			},
+			}, mutex: &sync.RWMutex{},
 			},
 			testbody: body{search: ""},
 			err:      true,
@@ -84,7 +88,7 @@ func TestMaps_Save(t *testing.T) {
 			testNumber: "2",
 			mp: Maps{urlMap: map[string]string{
 				"test": "https://ya.ru",
-			},
+			}, mutex: &sync.RWMutex{},
 			},
 			testbody: body{search: "https://yandex.ru/pogoda"},
 			err:      false,

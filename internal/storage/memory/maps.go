@@ -1,21 +1,24 @@
-package storage
+package memory
 
 import (
 	"errors"
 	"github.com/Xrefullx/golang-shorturl/internal/app"
+	"github.com/Xrefullx/golang-shorturl/internal/storage"
 	"strconv"
+	"sync"
 )
 
-var _ URLStore = (*Maps)(nil)
+var _ storage.URLStore = (*Maps)(nil)
 
 type Maps struct {
 	urlMap map[string]string
+	mutex  *sync.RWMutex
 }
 
 func NewStorage() *Maps {
-	URLMap := make(map[string]string)
 	return &Maps{
-		urlMap: URLMap,
+		urlMap: make(map[string]string),
+		mutex:  &sync.RWMutex{},
 	}
 }
 
@@ -24,27 +27,35 @@ func (mp *Maps) Get(short string) (string, error) {
 		return "", errors.New("err short url")
 
 	}
-	longURL, ok := mp.urlMap[short]
+	mp.mutex.RLock()
+	long, ok := mp.urlMap[short]
+	defer mp.mutex.RUnlock()
 	if ok {
-		return longURL, nil
+		return long, nil
 	}
+
 	return "", nil
 }
-func (mp *Maps) Save(searchURL string) (string, error) {
-	if searchURL == "" {
+func (mp *Maps) Save(short string, search string) (string, error) {
+	if search == "" {
 		return "", errors.New("err")
 
 	}
-	short, err := mp.genShort(searchURL, len(mp.urlMap))
+	short, err := mp.genShort(search, len(mp.urlMap))
 	if err != nil {
 		return "", err
 	}
-	mp.urlMap[short] = searchURL
+	mp.urlMap[short] = search
+
+	mp.mutex.Lock()
+	mp.urlMap[short] = search
+	defer mp.mutex.Unlock()
+
 	return short, nil
 }
 
 func (mp *Maps) genShort(searchURL string, Count int) (string, error) {
-	short := handlers.GenerateLink(searchURL, strconv.Itoa(Count))
+	short := app.GenerateLink(searchURL, strconv.Itoa(Count))
 	_, ok := mp.urlMap[short]
 	if ok {
 		Count++
@@ -55,4 +66,9 @@ func (mp *Maps) genShort(searchURL string, Count int) (string, error) {
 		return shortURL, nil
 	}
 	return short, nil
+}
+func (mp *Maps) IsShort(shortID string) bool {
+	_, ok := mp.urlMap[shortID]
+
+	return !ok
 }

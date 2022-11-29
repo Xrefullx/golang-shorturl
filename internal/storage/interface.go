@@ -1,10 +1,7 @@
 package storage
 
-type URLStorage struct {
-	URLStorage URLStore
-}
-
 type URLStore interface {
-	Get(shortURL string) (string, error)
-	Save(searchURL string) (string, error)
+	Get(short string) (string, error)
+	Save(short string, search string) (string, error)
+	IsShort(short string) bool
 }
