@@ -12,13 +12,12 @@ var _ storage.URLStore = (*Maps)(nil)
 
 type Maps struct {
 	urlMap map[string]string
-	mutex  *sync.RWMutex
+	*sync.RWMutex
 }
 
 func NewStorage() *Maps {
 	return &Maps{
 		urlMap: make(map[string]string),
-		mutex:  &sync.RWMutex{},
 	}
 }
 
@@ -27,9 +26,9 @@ func (mp *Maps) Get(short string) (string, error) {
 		return "", errors.New("err short url")
 
 	}
-	mp.mutex.RLock()
+	mp.RLock()
 	long, ok := mp.urlMap[short]
-	defer mp.mutex.RUnlock()
+	defer mp.RUnlock()
 	if ok {
 		return long, nil
 	}
@@ -47,9 +46,9 @@ func (mp *Maps) Save(short string, search string) (string, error) {
 	}
 	mp.urlMap[short] = search
 
-	mp.mutex.Lock()
+	mp.Lock()
 	mp.urlMap[short] = search
-	defer mp.mutex.Unlock()
+	defer mp.Unlock()
 
 	return short, nil
 }
