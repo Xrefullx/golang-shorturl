@@ -1,12 +1,14 @@
 package router
 
 import (
+	"github.com/Xrefullx/golang-shorturl/internal/gzip"
 	"github.com/Xrefullx/golang-shorturl/internal/handlers"
 	"github.com/go-chi/chi/v5"
 )
 
 func CreateRouter(handler handlers.Handler) *chi.Mux {
 	r := chi.NewRouter()
+	r.Use(gzip.GzipMiddleware)
 	r.Get("/{shortID}", handler.GetHandler)
 	r.Post("/", handler.SaveHandler)
 	r.Post("/api/shorten", handler.JsonSave)
