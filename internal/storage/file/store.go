@@ -3,93 +3,63 @@ package file
 import (
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/Xrefullx/golang-shorturl/internal/storage"
+	"github.com/google/uuid"
 )
 
-var _ storage.URLStore = (*FileStorage)(nil)
+var _ storage.Storage = (*Storage)(nil)
 
-type FileStorage struct {
-	fileName string
-	cache    map[string]string
-	sync.RWMutex
+type Storage struct {
+	shortURLRepo *shortURLRepository
+	userRepo     *userRepository
+	fileName     string
+	cache        *cache
 }
 
-func NewFileStorage(fileName string) (*FileStorage, error) {
-	fileStorage := FileStorage{
+func NewFileStorage(fileName string) (*Storage, error) {
+	st := Storage{
 		fileName: fileName,
+		cache:    newCache(),
 	}
-	if err := fileStorage.initFromFile(); err != nil {
+
+	var err error
+
+	st.shortURLRepo, err = newShortURLRepository(st.cache, st.fileName)
+	if err != nil {
 		return nil, fmt.Errorf("ошибка инициализации хранилища: %w", err)
 	}
 
-	return &fileStorage, nil
-}
-
-func (f *FileStorage) Get(shortID string) (string, error) {
-	if shortID == "" {
-		return "", errors.New("нельзя использовать пустой id")
-	}
-
-	f.RLock()
-	defer f.RUnlock()
-
-	longURL, ok := (f.cache)[shortID]
-	if ok {
-		return longURL, nil
-	}
-
-	return "", nil
-}
-
-func (f *FileStorage) Save(shortID string, srcURL string) (string, error) {
-	if shortID == "" {
-		return "", errors.New("нельзя использовать пустой id")
-	}
-	if srcURL == "" {
-		return "", errors.New("нельзя сохранить пустое значение")
-	}
-	if !f.IsShort(shortID) {
-		return "", errors.New("id уже существует")
-	}
-
-	f.Lock()
-	defer f.Unlock()
-
-	if err := f.writeToFile(shortID, srcURL); err != nil {
-		return "", err
-	}
-
-	f.cache[shortID] = srcURL
-
-	return shortID, nil
-}
-func (f *FileStorage) IsShort(shortID string) bool {
-	f.RLock()
-	defer f.RUnlock()
-
-	_, ok := f.cache[shortID]
-
-	return !ok
-}
-
-func (f *FileStorage) writeToFile(shortID string, srcURL string) error {
-	fileWriter, err := newFileWriter(f.fileName)
+	st.userRepo, err = newUserRepository(st.cache)
 	if err != nil {
-		return fmt.Errorf("ошибка записи в хранилище: %w", err)
+		return nil, fmt.Errorf("ошибка инициализации хранилища: %w", err)
 	}
 
-	defer fileWriter.Close()
-	if err := fileWriter.WriteURL(shortID, srcURL); err != nil {
-		return fmt.Errorf("ошибка записи в хранилище: %w", err)
+	if st.fileName != "" {
+		if err := st.initFromFile(); err != nil {
+			return nil, fmt.Errorf("ошибка инициализации хранилища: %w", err)
+		}
 	}
 
-	return nil
+	return &st, nil
 }
 
-func (f *FileStorage) initFromFile() error {
-	fileReader, err := newFileReader(f.fileName)
+func (s *Storage) URL() storage.URLRepository {
+	if s.shortURLRepo != nil {
+		return s.shortURLRepo
+	}
+	return s.shortURLRepo
+}
+
+func (s *Storage) User() storage.UserRepository {
+	if s.shortURLRepo != nil {
+		return s.userRepo
+	}
+	return s.userRepo
+}
+
+func (s *Storage) initFromFile() error {
+	fileReader, err := newFileReader(s.fileName)
 	if err != nil {
 		return fmt.Errorf("ошибка чтения из хранилища: %w", err)
 	}
@@ -99,7 +69,33 @@ func (f *FileStorage) initFromFile() error {
 	if err != nil {
 		return fmt.Errorf("ошибка чтения из хранилища: %w", err)
 	}
-	f.cache = data
+
+	s.cache.urlCache = data
+
+	if len(data) > 0 {
+		for _, v := range data {
+			existShortID, _ := s.shortURLRepo.Exist(v.ShortID)
+			if !existShortID {
+				s.cache.shortURLidx[v.ShortID] = v.ID
+			}
+
+			existUser, _ := s.userRepo.Exist(v.UserID)
+			if v.UserID != uuid.Nil && !existUser {
+				s.cache.userCache[v.UserID] = v.UserID
+			}
+
+			existURL, _ := s.shortURLRepo.Exist(v.URL)
+			if !existURL {
+				s.cache.srcURLidx[v.URL] = v.ID
+			}
+		}
+	}
 
 	return nil
 }
+
+func (s *Storage) Ping() error {
+	return errors.New("db not initialized")
+}
+
+func (s *Storage) Close() {}

@@ -1,9 +1,8 @@
-package handlers
+package api
 
 import (
 	"bytes"
-	"github.com/Xrefullx/golang-shorturl/internal/app"
-	"github.com/Xrefullx/golang-shorturl/internal/router"
+	"github.com/Xrefullx/golang-shorturl/internal/service"
 	"github.com/Xrefullx/golang-shorturl/internal/storage/memory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,17 +44,17 @@ func TestHandler_CheckRequestHandler(t *testing.T) {
 			},
 		},
 	}
-	var config app.ServerConfig
-	app.EnviromentConfig(&config)
+	var config service.ServerConfig
+	service.EnviromentConfig(&config)
 	for _, x := range testArray {
 		t.Run((x.nameTest), func(t *testing.T) {
 			db := memory.NewStorage()
 			if x.init != nil {
 				x.init(db)
 			}
-			sUrl, _ := app.NewShort(db)
+			sUrl, _ := service.NewShort(db)
 			h := &Handler{sUrl: sUrl}
-			r := router.CreateRouter(*h)
+			r := CreateRouter(*h)
 			request := httptest.NewRequest(x.method, x.url, bytes.NewBuffer([]byte(x.body)))
 			if x.contentType != "" {
 				request.Header.Set("Content-Type", x.contentType)
@@ -77,14 +76,14 @@ func TestHandler_CheckRequestHandler(t *testing.T) {
 	}
 }
 func TestHandler_SaveHandler(t *testing.T) {
-	var config app.ServerConfig
-	app.EnviromentConfig(&config)
+	var config service.ServerConfig
+	service.EnviromentConfig(&config)
 	long := "https://ya.ru/"
 	longURLHeader := "Location"
 	db := memory.NewStorage()
-	sUrl, _ := app.NewShort(db)
+	sUrl, _ := service.NewShort(db)
 	handler := Handler{sUrl: sUrl, baseUrl: config.Url}
-	r := router.CreateRouter(handler)
+	r := CreateRouter(handler)
 	request := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer([]byte(long)))
 	request.RemoteAddr = "localhost" + config.Port
 	w := httptest.NewRecorder()

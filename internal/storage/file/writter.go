@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/Xrefullx/golang-shorturl/internal/storage"
+	"github.com/Xrefullx/golang-shorturl/internal/storage/postgres/schema_postgres"
 	"os"
 )
 
@@ -29,13 +29,9 @@ func (f *fileWriter) Close() error {
 	return f.file.Close()
 }
 
-func (f *fileWriter) WriteURL(shortID string, srcURL string) error {
-	writeURL := storage.ShortURL{
-		ShortID: shortID,
-		URL:     srcURL,
-	}
+func (f *fileWriter) WriteURL(sht schema_postgres.ShortURL) error {
 
-	jsURL, err := json.Marshal(writeURL)
+	jsURL, err := json.Marshal(sht)
 	if err != nil {
 		return fmt.Errorf("ошибка обработки данных для записи в файл: %w", err)
 	}

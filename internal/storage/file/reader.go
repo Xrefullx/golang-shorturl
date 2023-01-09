@@ -4,7 +4,8 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/Xrefullx/golang-shorturl/internal/storage"
+	"github.com/Xrefullx/golang-shorturl/internal/storage/postgres/schema_postgres"
+	"github.com/google/uuid"
 	"os"
 )
 
@@ -29,14 +30,14 @@ func (f *fileReader) Close() error {
 	return f.file.Close()
 }
 
-func (f *fileReader) ReadAll() (map[string]string, error) {
-	data := make(map[string]string)
+func (f *fileReader) ReadAll() (map[uuid.UUID]schema_postgres.ShortURL, error) {
+	data := make(map[uuid.UUID]schema_postgres.ShortURL)
 	for f.scanner.Scan() {
-		lineURL := storage.ShortURL{}
+		lineURL := schema_postgres.ShortURL{}
 		if err := json.Unmarshal(f.scanner.Bytes(), &lineURL); err != nil {
 			return nil, fmt.Errorf("ошибка обработки данных из файла: %w", err)
 		}
-		data[lineURL.ShortID] = lineURL.URL
+		data[lineURL.ID] = lineURL
 	}
 
 	if err := f.scanner.Err(); err != nil {
