@@ -30,7 +30,7 @@ func NewHandler(shtSvc service.URLShortener, authSvc service.UserManager, baseUR
 
 func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Ping(r.Context()); err != nil {
-		h.serverError(w, err.Error())
+		h.serverError(w, err.Error(), 0)
 		return
 	}
 
@@ -47,13 +47,13 @@ func (h *Handler) DeleteBatch(w http.ResponseWriter, r *http.Request) {
 
 	userID := h.getUserIDFromContext(r)
 	if userID == uuid.Nil {
-		h.serverError(w, "User ID is empty")
+		h.serverError(w, "User ID is empty", 0)
 
 		return
 	}
 
 	if err := h.svc.DeleteURLList(userID, batch...); err != nil {
-		h.serverError(w, err.Error())
+		h.serverError(w, err.Error(), http.StatusGone)
 
 		return
 	}
@@ -80,7 +80,7 @@ func (h *Handler) SaveBatch(w http.ResponseWriter, r *http.Request) {
 	userID := h.getUserIDFromContext(r)
 
 	if err := h.svc.SaveURLList(listToAdd, userID); err != nil {
-		h.serverError(w, err.Error())
+		h.serverError(w, err.Error(), 0)
 
 		return
 	}
@@ -89,7 +89,7 @@ func (h *Handler) SaveBatch(w http.ResponseWriter, r *http.Request) {
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetIndent("", "   ")
 	if err := encoder.Encode(NewBatchListResponseFromMap(listToAdd, h.baseURL)); err != nil {
-		h.serverError(w, err.Error())
+		h.serverError(w, err.Error(), 0)
 
 		return
 	}
@@ -109,7 +109,7 @@ func (h *Handler) GetUserUrls(w http.ResponseWriter, r *http.Request) {
 
 	urlList, err := h.svc.GetUserURLList(r.Context(), userID)
 	if err != nil {
-		h.serverError(w, err.Error())
+		h.serverError(w, err.Error(), 0)
 		return
 	}
 
@@ -125,7 +125,7 @@ func (h *Handler) GetUserUrls(w http.ResponseWriter, r *http.Request) {
 
 	jsResult, err := json.Marshal(NewShortenListResponseFromCanonical(urlList, h.baseURL))
 	if err != nil {
-		h.serverError(w, err.Error())
+		h.serverError(w, err.Error(), 0)
 		return
 	}
 
@@ -171,7 +171,7 @@ func (h *Handler) SaveURLJSONHandler(w http.ResponseWriter, r *http.Request) {
 		Result: h.baseURL + "/" + shortID,
 	})
 	if err != nil {
-		h.serverError(w, err.Error())
+		h.serverError(w, err.Error(), 0)
 		return
 	}
 
@@ -197,7 +197,7 @@ func (h *Handler) SaveURLHandler(w http.ResponseWriter, r *http.Request) {
 	// read incoming URL
 	srcURL, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		h.serverError(w, err.Error())
+		h.serverError(w, err.Error(), 0)
 		return
 	}
 	defer r.Body.Close()
@@ -273,7 +273,7 @@ func (h *Handler) getUserIDFromContext(r *http.Request) uuid.UUID {
 	return uuid.Nil
 }
 
-func (h *Handler) serverError(w http.ResponseWriter, errText string) {
+func (h *Handler) serverError(w http.ResponseWriter, errText string, gone int) {
 	http.Error(w, errText, http.StatusInternalServerError)
 }
 
