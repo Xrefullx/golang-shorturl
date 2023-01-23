@@ -28,15 +28,6 @@ func NewHandler(shtSvc service.URLShortener, authSvc service.UserManager, baseUR
 	}, nil
 }
 
-func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
-	if err := h.svc.Ping(r.Context()); err != nil {
-		h.serverError(w, err.Error(), 0)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
 func (h *Handler) DeleteBatch(w http.ResponseWriter, r *http.Request) {
 	var batch BatchDeleteRequest
 	if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
@@ -60,6 +51,15 @@ func (h *Handler) DeleteBatch(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("content-type", "text/plain")
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
+	if err := h.svc.Ping(r.Context()); err != nil {
+		h.serverError(w, err.Error(), 0)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handler) SaveBatch(w http.ResponseWriter, r *http.Request) {
