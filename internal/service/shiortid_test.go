@@ -1,9 +1,10 @@
 package service
 
 import (
-	"github.com/stretchr/testify/assert"
 	"regexp"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerateShortLink(t *testing.T) {
@@ -33,7 +34,7 @@ func TestGenerateShortLink(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := GenerateLink(tt.args.srcLink, tt.args.salt)
+			v := GenerateShortLink(tt.args.srcLink, tt.args.salt)
 
 			assert.False(t, len(v) == 0 || len(v) > 10, "GenerateShortLink() = %v, длинна генерируемой ссылки должа быть >0 и <10 символов", v)
 

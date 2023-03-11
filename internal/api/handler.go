@@ -9,7 +9,7 @@ import (
 
 	"github.com/Xrefullx/golang-shorturl/internal/model"
 	"github.com/Xrefullx/golang-shorturl/internal/service"
-	"github.com/Xrefullx/golang-shorturl/internal/shrterr"
+	"github.com/Xrefullx/golang-shorturl/internal/shterrors"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -20,6 +20,7 @@ type Handler struct {
 	baseURL string
 }
 
+// NewHandler init new handler object and return pointer.
 func NewHandler(shtSvc service.URLShortener, authSvc service.UserManager, baseURL string) (*Handler, error) {
 	return &Handler{
 		svc:     shtSvc,
@@ -28,6 +29,20 @@ func NewHandler(shtSvc service.URLShortener, authSvc service.UserManager, baseUR
 	}, nil
 }
 
+// Ping handler check db connection.
+// Return status 200 if db is active.
+// Return status 500 if db not active.
+func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
+	if err := h.svc.Ping(r.Context()); err != nil {
+		h.serverError(w, err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+//	 DeleteBatch handler async soft remove list urls for user.
+//		Return status 202 if list of urls accepted to delete.
 func (h *Handler) DeleteBatch(w http.ResponseWriter, r *http.Request) {
 	var batch BatchDeleteRequest
 	if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
@@ -38,13 +53,13 @@ func (h *Handler) DeleteBatch(w http.ResponseWriter, r *http.Request) {
 
 	userID := h.getUserIDFromContext(r)
 	if userID == uuid.Nil {
-		h.serverError(w, "User ID is empty", 0)
+		h.serverError(w, "User ID is empty")
 
 		return
 	}
 
 	if err := h.svc.DeleteURLList(userID, batch...); err != nil {
-		h.serverError(w, err.Error(), http.StatusGone)
+		h.serverError(w, err.Error())
 
 		return
 	}
@@ -53,17 +68,12 @@ func (h *Handler) DeleteBatch(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
-	if err := h.svc.Ping(r.Context()); err != nil {
-		h.serverError(w, err.Error(), 0)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
+// SaveBatch handler save list of urls and return list of shorten urls.
+// Accept list of pairs [id, url] in json format, model BatchRequest.
+// Return status 201 and list of pairs [id, short url] in json format, model BatchResponse, if processed.
 func (h *Handler) SaveBatch(w http.ResponseWriter, r *http.Request) {
 
+	//  read batch
 	var batch []BatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -72,6 +82,7 @@ func (h *Handler) SaveBatch(w http.ResponseWriter, r *http.Request) {
 
 	defer r.Body.Close()
 
+	//  make map id[url] to add
 	listToAdd := make(map[string]string, len(batch))
 	for _, batchEl := range batch {
 		listToAdd[batchEl.ID] = batchEl.URL
@@ -79,17 +90,19 @@ func (h *Handler) SaveBatch(w http.ResponseWriter, r *http.Request) {
 
 	userID := h.getUserIDFromContext(r)
 
+	//  save mp to db, values in map updates to shortURL
 	if err := h.svc.SaveURLList(listToAdd, userID); err != nil {
-		h.serverError(w, err.Error(), 0)
+		h.serverError(w, err.Error())
 
 		return
 	}
 
+	//  serialize response
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetIndent("", "   ")
 	if err := encoder.Encode(NewBatchListResponseFromMap(listToAdd, h.baseURL)); err != nil {
-		h.serverError(w, err.Error(), 0)
+		h.serverError(w, err.Error())
 
 		return
 	}
@@ -99,6 +112,9 @@ func (h *Handler) SaveBatch(w http.ResponseWriter, r *http.Request) {
 	w.Write(buffer.Bytes())
 }
 
+// GetUserUrls handler return list of stored urls for user.
+// Return status 200 and list of [short url, url] in json format, model ShortenListResponse,  if user urls founded.
+// Return status 204 if urls not founded.
 func (h *Handler) GetUserUrls(w http.ResponseWriter, r *http.Request) {
 	userID := h.getUserIDFromContext(r)
 
@@ -109,7 +125,7 @@ func (h *Handler) GetUserUrls(w http.ResponseWriter, r *http.Request) {
 
 	urlList, err := h.svc.GetUserURLList(r.Context(), userID)
 	if err != nil {
-		h.serverError(w, err.Error(), 0)
+		h.serverError(w, err.Error())
 		return
 	}
 
@@ -125,7 +141,7 @@ func (h *Handler) GetUserUrls(w http.ResponseWriter, r *http.Request) {
 
 	jsResult, err := json.Marshal(NewShortenListResponseFromCanonical(urlList, h.baseURL))
 	if err != nil {
-		h.serverError(w, err.Error(), 0)
+		h.serverError(w, err.Error())
 		return
 	}
 
@@ -134,7 +150,12 @@ func (h *Handler) GetUserUrls(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(jsResult))
 }
 
+// SaveURLJSONHandler save incoming url and return short url.
+// Accept url in json format, model ShortenRequest.
+// Return status 201 and short url in json format, model ShortenResponse, if saved.
+// Return status 409 and stored short url in json format, model ShortenResponse, if url is exist in db.
 func (h *Handler) SaveURLJSONHandler(w http.ResponseWriter, r *http.Request) {
+	// read incoming ShortenRequest
 
 	jsBody, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -154,9 +175,11 @@ func (h *Handler) SaveURLJSONHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// save to db and get shortID
 	userID := h.getUserIDFromContext(r)
 	shortID, err := h.svc.SaveURL(r.Context(), incoming.SrcURL, userID)
 
+	// handle conflict Add
 	isConflict := false
 	if err != nil {
 		shortID, isConflict = processConflictErr(err)
@@ -167,37 +190,34 @@ func (h *Handler) SaveURLJSONHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// marshal response
 	jsResult, err := json.Marshal(ShortenResponse{
 		Result: h.baseURL + "/" + shortID,
 	})
 	if err != nil {
-		h.serverError(w, err.Error(), 0)
+		h.serverError(w, err.Error())
 		return
 	}
 
 	w.Header().Set("content-type", "application/json")
+	// write response
 	if isConflict {
 		w.WriteHeader(http.StatusConflict)
 	} else {
 		w.WriteHeader(http.StatusCreated)
 	}
 	w.Write(jsResult)
-
 }
 
-func processConflictErr(err error) (string, bool) {
-	if err != nil && errors.Is(err, &shrterr.ErrorConflictSaveURL{}) {
-		conflictErr, _ := err.(*shrterr.ErrorConflictSaveURL)
-		return conflictErr.ExistShortURL, true
-	}
-	return "", false
-}
-
+// SaveURLHandler save incoming url and return short url.
+// Accept url in text format.
+// Return status 201 and short url in text format if saved.
+// Return status 409 and stored short url in text format, if url is exist in db.
 func (h *Handler) SaveURLHandler(w http.ResponseWriter, r *http.Request) {
 	// read incoming URL
 	srcURL, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		h.serverError(w, err.Error(), 0)
+		h.serverError(w, err.Error())
 		return
 	}
 	defer r.Body.Close()
@@ -210,6 +230,7 @@ func (h *Handler) SaveURLHandler(w http.ResponseWriter, r *http.Request) {
 	userID := h.getUserIDFromContext(r)
 	shortID, err := h.svc.SaveURL(r.Context(), string(srcURL), userID)
 
+	// handle conflict Add
 	isConflict := false
 	if err != nil {
 		shortID, isConflict = processConflictErr(err)
@@ -220,6 +241,7 @@ func (h *Handler) SaveURLHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// write response
 	w.Header().Set("content-type", "text/plain; charset=utf-8")
 	if isConflict {
 		w.WriteHeader(http.StatusConflict)
@@ -229,6 +251,11 @@ func (h *Handler) SaveURLHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(h.baseURL + "/" + shortID))
 }
 
+// GetURLHandler return redirect for url by incoming shortID param.
+// Accept shortID from route params.
+// Return status 307 and Location field with stored url in header, if short url founded.
+// Return status 410 if short url founded, but mark as deleted.
+// Return status 404 if short url not founded.
 func (h *Handler) GetURLHandler(w http.ResponseWriter, r *http.Request) {
 	shortID := chi.URLParam(r, "shortID")
 	if shortID == "" {
@@ -259,6 +286,7 @@ func (h *Handler) GetURLHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// getUserIDFromContext gets user UUID from context
 func (h *Handler) getUserIDFromContext(r *http.Request) uuid.UUID {
 	ctxID := r.Context().Value(ContextKeyUserID)
 	if ctxID == nil {
@@ -273,7 +301,17 @@ func (h *Handler) getUserIDFromContext(r *http.Request) uuid.UUID {
 	return uuid.Nil
 }
 
-func (h *Handler) serverError(w http.ResponseWriter, errText string, gone int) {
+// processConflictErr check if error is conflict adding URL.
+// If incoming url exist return shortID from error and true.
+func processConflictErr(err error) (string, bool) {
+	if err != nil && errors.Is(err, &shterrors.ErrorConflictSaveURL{}) {
+		conflictErr, _ := err.(*shterrors.ErrorConflictSaveURL)
+		return conflictErr.ExistShortURL, true
+	}
+	return "", false
+}
+
+func (h *Handler) serverError(w http.ResponseWriter, errText string) {
 	http.Error(w, errText, http.StatusInternalServerError)
 }
 

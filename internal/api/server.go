@@ -4,16 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+
 	"github.com/Xrefullx/golang-shorturl/internal/service"
 	"github.com/Xrefullx/golang-shorturl/internal/storage"
 	"github.com/Xrefullx/golang-shorturl/pkg"
-	"net/http"
 )
 
+// Server implements http server
 type Server struct {
 	httpServer http.Server
 }
 
+// NewServer return new server
 func NewServer(cfg *pkg.Config, db storage.Storage) (*Server, error) {
 	svcSht, err := service.NewShortURLService(db)
 	if err != nil {
@@ -28,19 +31,26 @@ func NewServer(cfg *pkg.Config, db storage.Storage) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ошибка инициализации handler:%w", err)
 	}
+
 	return &Server{
 		httpServer: http.Server{
 			Addr:    cfg.ServerPort,
-			Handler: CreateRouter(handler),
+			Handler: NewRouter(handler, cfg.Debug),
 		},
 	}, nil
 }
+
+// Run starts http server
 func (s *Server) Run() error {
 	return s.httpServer.ListenAndServe()
 }
+
+// Shutdown sutdown http server
 func (s *Server) Shutdown(ctx context.Context) error {
+	//  check server not off
 	if err := s.httpServer.ListenAndServe(); err == http.ErrServerClosed {
 		return errors.New("http server not runned")
 	}
+
 	return s.httpServer.Shutdown(ctx)
 }

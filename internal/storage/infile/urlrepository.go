@@ -1,24 +1,26 @@
-package file
+package infile
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Xrefullx/golang-shorturl/internal/storage/postgres/schema_postgres"
 
 	"github.com/Xrefullx/golang-shorturl/internal/model"
-	"github.com/Xrefullx/golang-shorturl/internal/shrterr"
+	"github.com/Xrefullx/golang-shorturl/internal/shterrors"
 	st "github.com/Xrefullx/golang-shorturl/internal/storage"
+	"github.com/Xrefullx/golang-shorturl/internal/storage/schema"
 	"github.com/google/uuid"
 )
 
 var _ st.URLRepository = (*shortURLRepository)(nil)
 
+// shortURLRepository implements URLRepository interface, provides actions with url records in inmemory storage.
 type shortURLRepository struct {
 	cache    *cache
 	fileName string
 }
 
+// newShortURLRepository inits new url repository.
 func newShortURLRepository(c *cache, fileName string) (*shortURLRepository, error) {
 	if c == nil {
 		return nil, errors.New("cant init repository cache not init")
@@ -30,6 +32,7 @@ func newShortURLRepository(c *cache, fileName string) (*shortURLRepository, erro
 	}, nil
 }
 
+// DeleteURLBatch marks list of urls as deleted.
 func (r *shortURLRepository) DeleteURLBatch(userID uuid.UUID, shortIDList ...string) error {
 	if len(shortIDList) == 0 {
 		return nil
@@ -39,7 +42,7 @@ func (r *shortURLRepository) DeleteURLBatch(userID uuid.UUID, shortIDList ...str
 		if sht != (model.ShortURL{}) {
 			if sht.UserID == userID && !sht.IsDeleted {
 				sht.IsDeleted = true
-				toAdd, err := schema_postgres.NewURLFromCanonical(sht)
+				toAdd, err := schema.NewURLFromCanonical(sht)
 				if err != nil {
 					return fmt.Errorf("ошибка обновления запси: %w", err)
 				}
@@ -54,6 +57,7 @@ func (r *shortURLRepository) DeleteURLBatch(userID uuid.UUID, shortIDList ...str
 	return nil
 }
 
+// SaveURLBuff saves list of urls to storage, without buffering.
 func (r *shortURLRepository) SaveURLBuff(sht *model.ShortURL) error {
 	if sht == nil {
 		return errors.New("short URL is nil")
@@ -67,13 +71,15 @@ func (r *shortURLRepository) SaveURLBuff(sht *model.ShortURL) error {
 	return nil
 }
 
+// SaveURLBuffFlush is empty imitates buffer flush.
 func (r *shortURLRepository) SaveURLBuffFlush() error {
 	return nil
 }
 
+// SaveURL saves url to inmemory storage.
 func (r *shortURLRepository) SaveURL(_ context.Context, sht model.ShortURL) (model.ShortURL, error) {
 
-	dbObj, err := schema_postgres.NewURLFromCanonical(sht)
+	dbObj, err := schema.NewURLFromCanonical(sht)
 	if err != nil {
 		return model.ShortURL{}, fmt.Errorf("ошибка хранилица:%w", err)
 	}
@@ -86,13 +92,13 @@ func (r *shortURLRepository) SaveURL(_ context.Context, sht model.ShortURL) (mod
 	existSrcURL, _ := r.ExistSrcURL(dbObj.URL)
 	if existSrcURL {
 
-		return model.ShortURL{}, &shrterr.ErrorConflictSaveURL{
+		return model.ShortURL{}, &shterrors.ErrorConflictSaveURL{
 			Err:           errors.New("конфликт добавления записи, URL уже существует"),
 			ExistShortURL: r.GetShortURLBySrcURL(dbObj.URL),
 		}
 	}
 
-	if userExist := r.UserExist(sht.UserID); !userExist {
+	if userExist := r.userExist(sht.UserID); !userExist {
 		return model.ShortURL{}, errors.New("пользователь не найден")
 	}
 
@@ -112,6 +118,7 @@ func (r *shortURLRepository) SaveURL(_ context.Context, sht model.ShortURL) (mod
 	return sht, nil
 }
 
+// GetURL selects url from inmemory storage, returns as canonical ShortURL.
 func (r *shortURLRepository) GetURL(_ context.Context, shortID string) (model.ShortURL, error) {
 	if shortID == "" {
 		return model.ShortURL{}, errors.New("нельзя использовать пустой id")
@@ -131,6 +138,7 @@ func (r *shortURLRepository) GetURL(_ context.Context, shortID string) (model.Sh
 	return model.ShortURL{}, nil
 }
 
+// GetShortURLBySrcURL returns stored shortID by url
 func (r *shortURLRepository) GetShortURLBySrcURL(url string) string {
 	r.cache.RLock()
 	id, ok := r.cache.srcURLidx[url]
@@ -146,6 +154,7 @@ func (r *shortURLRepository) GetShortURLBySrcURL(url string) string {
 	return ""
 }
 
+// GetUserURLList selects array of urls for user, returns as array of canonical ShortURL.
 func (r *shortURLRepository) GetUserURLList(_ context.Context, userID uuid.UUID, limit int) ([]model.ShortURL, error) {
 	r.cache.RLock()
 	defer r.cache.RUnlock()
@@ -153,8 +162,8 @@ func (r *shortURLRepository) GetUserURLList(_ context.Context, userID uuid.UUID,
 	if len(r.cache.urlCache) == 0 {
 		return nil, nil
 	}
-	var dbURLs schema_postgres.URLList
-	dbURLs = make([]schema_postgres.ShortURL, 0, limit)
+	var dbURLs schema.URLList
+	dbURLs = make([]schema.ShortURL, 0, limit)
 	for _, v := range r.cache.urlCache {
 		if v.UserID != uuid.Nil && v.UserID == userID {
 			dbURLs = append(dbURLs, v)
@@ -171,13 +180,7 @@ func (r *shortURLRepository) GetUserURLList(_ context.Context, userID uuid.UUID,
 	return dbURLs.ToCanonical()
 }
 
-func (r *shortURLRepository) UserExist(userID uuid.UUID) bool {
-	r.cache.RLock()
-	_, userExist := r.cache.userCache[userID]
-	defer r.cache.RUnlock()
-	return userExist
-}
-
+// Exist checks that shortID not exist in storage.
 func (r *shortURLRepository) Exist(shortID string) (bool, error) {
 	r.cache.RLock()
 	_, ok := r.cache.shortURLidx[shortID]
@@ -186,6 +189,7 @@ func (r *shortURLRepository) Exist(shortID string) (bool, error) {
 	return ok, nil
 }
 
+// ExistSrcURL checks that url not exist in storage.
 func (r *shortURLRepository) ExistSrcURL(url string) (bool, error) {
 	r.cache.RLock()
 	_, ok := r.cache.srcURLidx[url]
@@ -194,7 +198,16 @@ func (r *shortURLRepository) ExistSrcURL(url string) (bool, error) {
 	return ok, nil
 }
 
-func (r *shortURLRepository) writeToFile(sht schema_postgres.ShortURL) error {
+// userExist checks that user is exist in storage.
+func (r *shortURLRepository) userExist(userID uuid.UUID) bool {
+	r.cache.RLock()
+	_, userExist := r.cache.userCache[userID]
+	defer r.cache.RUnlock()
+	return userExist
+}
+
+// writeToFile writes url to file.
+func (r *shortURLRepository) writeToFile(sht schema.ShortURL) error {
 	fileWriter, err := newFileWriter(r.fileName)
 	if err != nil {
 		return fmt.Errorf("ошибка записи в хранилище: %w", err)

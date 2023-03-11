@@ -1,19 +1,22 @@
-package file
+package infile
 
 import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/Xrefullx/golang-shorturl/internal/storage/postgres/schema_postgres"
-	"github.com/google/uuid"
 	"os"
+
+	"github.com/Xrefullx/golang-shorturl/internal/storage/schema"
+	"github.com/google/uuid"
 )
 
+// fileReader provides data reading from file.
 type fileReader struct {
 	file    *os.File
 	scanner *bufio.Scanner
 }
 
+// newFileReader inits new file reader.
 func newFileReader(fileName string) (*fileReader, error) {
 	file, err := os.OpenFile(fileName, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
@@ -26,14 +29,16 @@ func newFileReader(fileName string) (*fileReader, error) {
 	}, nil
 }
 
+// Close closes file.
 func (f *fileReader) Close() error {
 	return f.file.Close()
 }
 
-func (f *fileReader) ReadAll() (map[uuid.UUID]schema_postgres.ShortURL, error) {
-	data := make(map[uuid.UUID]schema_postgres.ShortURL)
+// ReadAll reads all items from file.
+func (f *fileReader) ReadAll() (map[uuid.UUID]schema.ShortURL, error) {
+	data := make(map[uuid.UUID]schema.ShortURL)
 	for f.scanner.Scan() {
-		lineURL := schema_postgres.ShortURL{}
+		lineURL := schema.ShortURL{}
 		if err := json.Unmarshal(f.scanner.Bytes(), &lineURL); err != nil {
 			return nil, fmt.Errorf("ошибка обработки данных из файла: %w", err)
 		}
