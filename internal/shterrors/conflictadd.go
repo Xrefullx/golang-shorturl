@@ -1,7 +1,8 @@
-package shrterr
+package shterrors
 
 var _ error = (*ErrorConflictSaveURL)(nil)
 
+// ErrorConflictSaveURL implements error if saved url is exist in storage.
 type ErrorConflictSaveURL struct {
 	Err           error
 	ExistShortURL string

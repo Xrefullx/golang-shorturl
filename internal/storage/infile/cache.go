@@ -1,23 +1,25 @@
-package file
+package infile
 
 import (
-	"github.com/Xrefullx/golang-shorturl/internal/storage/postgres/schema_postgres"
 	"sync"
 
+	"github.com/Xrefullx/golang-shorturl/internal/storage/schema"
 	"github.com/google/uuid"
 )
 
+// cache stores records and indexes in memory.
 type cache struct {
 	sync.RWMutex
-	urlCache    map[uuid.UUID]schema_postgres.ShortURL
+	urlCache    map[uuid.UUID]schema.ShortURL
 	shortURLidx map[string]uuid.UUID
 	srcURLidx   map[string]uuid.UUID
 	userCache   map[uuid.UUID]uuid.UUID
 }
 
+// newCache inits new cache.
 func newCache() *cache {
 	return &cache{
-		urlCache:    make(map[uuid.UUID]schema_postgres.ShortURL),
+		urlCache:    make(map[uuid.UUID]schema.ShortURL),
 		userCache:   make(map[uuid.UUID]uuid.UUID),
 		shortURLidx: make(map[string]uuid.UUID),
 		srcURLidx:   make(map[string]uuid.UUID),

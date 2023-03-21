@@ -2,17 +2,28 @@ package main
 
 import (
 	"context"
-	"github.com/Xrefullx/golang-shorturl/internal/api"
-	"github.com/Xrefullx/golang-shorturl/internal/storage"
-	"github.com/Xrefullx/golang-shorturl/internal/storage/file"
-	"github.com/Xrefullx/golang-shorturl/internal/storage/postgres"
-	"github.com/Xrefullx/golang-shorturl/pkg"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
+
+	"github.com/Xrefullx/golang-shorturl/internal/api"
+	"github.com/Xrefullx/golang-shorturl/internal/storage"
+	"github.com/Xrefullx/golang-shorturl/internal/storage/infile"
+	"github.com/Xrefullx/golang-shorturl/internal/storage/psql"
+	"github.com/Xrefullx/golang-shorturl/pkg"
+)
+
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
 )
 
 func main() {
+	fmt.Printf("Build version:%v\n", buildVersion)
+	fmt.Printf("Build date:%v\n", buildDate)
+	fmt.Printf("Build commit:%v\n", buildCommit)
 
 	cfg, err := pkg.NewConfig()
 	if err != nil {
@@ -41,16 +52,21 @@ func main() {
 	}
 }
 
+// getDB returns initialized storage
+// psql storage if dsn not empty, else memory storage
 func getDB(cfg pkg.Config) (storage.Storage, error) {
+	//  postgress storage
 	if cfg.DatabaseDSN != "" {
-		db, err := postgres.NewStorage(cfg.DatabaseDSN)
+		db, err := psql.NewStorage(cfg.DatabaseDSN)
 		if err != nil {
 			return nil, err
 		}
 
 		return db, nil
 	}
-	db, err := file.NewFileStorage(cfg.FileStoragePath)
+
+	//  memory with file storage
+	db, err := infile.NewFileStorage(cfg.FileStoragePath)
 	if err != nil {
 		return nil, err
 	}

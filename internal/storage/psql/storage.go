@@ -1,9 +1,10 @@
-package postgres
+package psql
 
 import (
 	"database/sql"
 	"errors"
 	"fmt"
+
 	"github.com/Xrefullx/golang-shorturl/internal/storage"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
@@ -11,15 +12,16 @@ import (
 
 var _ storage.Storage = (*Storage)(nil)
 
-type (
-	Storage struct {
-		shortURLRepo *shortURLRepository
-		userRepo     *userRepository
-		db           *sql.DB
-		conStringDSN string
-	}
-)
+// Storage implements Storage interface, provides storing data in psql database.
+type Storage struct {
+	shortURLRepo *shortURLRepository
+	userRepo     *userRepository
+	db           *sql.DB
+	conStringDSN string
+}
 
+// NewStorage inits new connection to psql storage.
+// !!!! On init drop all and init tables.
 func NewStorage(conStringDSN string) (*Storage, error) {
 	if conStringDSN == "" {
 		return nil, fmt.Errorf("ошибка инициализации бд:%v", "строка соединения с бд пуста")
@@ -48,6 +50,7 @@ func NewStorage(conStringDSN string) (*Storage, error) {
 	return st, nil
 }
 
+// URL returns urls repository.
 func (s *Storage) URL() storage.URLRepository {
 	if s.shortURLRepo != nil {
 		return s.shortURLRepo
@@ -55,10 +58,12 @@ func (s *Storage) URL() storage.URLRepository {
 	return s.shortURLRepo
 }
 
+// User returns users repository.
 func (s *Storage) User() storage.UserRepository {
 	return s.userRepo
 }
 
+// Ping checks database connection.
 func (s *Storage) Ping() error {
 	if s == nil || s.db == nil {
 		return errors.New("db not initialized")
@@ -71,6 +76,7 @@ func (s *Storage) Ping() error {
 	return nil
 }
 
+// Close  closes database connection.
 func (s Storage) Close() {
 	if s.db == nil {
 		return
@@ -80,6 +86,7 @@ func (s Storage) Close() {
 	s.db = nil
 }
 
+// initBase drops all and inits database tables.
 func initBase(db *sql.DB) error {
 	row := db.QueryRow("DROP SCHEMA public CASCADE;CREATE SCHEMA public;")
 	if row.Err() != nil {
