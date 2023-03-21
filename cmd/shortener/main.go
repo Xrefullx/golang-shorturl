@@ -21,9 +21,10 @@ var (
 )
 
 func main() {
-	fmt.Printf("Build version:%v\n", buildVersion)
-	fmt.Printf("Build date:%v\n", buildDate)
-	fmt.Printf("Build commit:%v\n", buildCommit)
+
+	fmt.Printf("Build version:<%v\n>", buildVersion)
+	fmt.Printf("Build date:<%v\n>", buildDate)
+	fmt.Printf("Build commit:<%v\n>", buildCommit)
 
 	cfg, err := pkg.NewConfig()
 	if err != nil {
