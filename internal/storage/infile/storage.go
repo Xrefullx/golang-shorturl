@@ -46,6 +46,10 @@ func NewFileStorage(fileName string) (*Storage, error) {
 	return &st, nil
 }
 
+func (s *Storage) WaitAsyncTasksEnded() bool {
+	return false
+}
+
 // URL returns urls repository.
 func (s *Storage) URL() storage.URLRepository {
 	if s.shortURLRepo != nil {
