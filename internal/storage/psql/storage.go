@@ -50,13 +50,6 @@ func NewStorage(ctx context.Context, asyncEndedChan chan struct{}, conStringDSN 
 		conStringDSN: conStringDSN,
 	}
 
-	// chan for signal that tasks ended
-	st.storageAsyncEnded = asyncEndedChan
-	st.urlAsyncEnded = make(chan struct{})
-
-	// init waiter
-	st.waitAsyncEnd = true
-
 	st.shortURLRepo = newShortURLRepository(ctx, db, st.urlAsyncEnded)
 	st.userRepo = newUserRepository(db)
 

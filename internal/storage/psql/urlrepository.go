@@ -72,7 +72,6 @@ func (r *shortURLRepository) DeleteURLBatch(userID uuid.UUID, shortIDList ...str
 	if len(shortIDList) == 0 {
 		return nil
 	}
-	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
 
@@ -83,7 +82,6 @@ func (r *shortURLRepository) DeleteURLBatch(userID uuid.UUID, shortIDList ...str
 		//  run flush on end of list
 		r.flushDeleteChan <- struct{}{}
 	}()
-
 	return nil
 }
 
@@ -113,7 +111,7 @@ func (r *shortURLRepository) initDeleteBatchWorker() {
 				}
 			}
 			if err := r.deleteTxURLBatch(cache); err != nil {
-				log.Fatalf("ошибка транзакции удаления очереди URL:%v", err.Error())
+				log.Println("ошибка транзакции удаления очереди URL:%v", err.Error())
 			}
 			cache = make([]schema.ShortURL, 0, delBuffBatch)
 
