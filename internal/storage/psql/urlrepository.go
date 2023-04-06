@@ -111,7 +111,7 @@ func (r *shortURLRepository) initDeleteBatchWorker() {
 				}
 			}
 			if err := r.deleteTxURLBatch(cache); err != nil {
-				log.Println("ошибка транзакции удаления очереди URL:%v", err.Error())
+				log.Print("ошибка транзакции удаления очереди URL:%v", err.Error())
 			}
 			cache = make([]schema.ShortURL, 0, delBuffBatch)
 
