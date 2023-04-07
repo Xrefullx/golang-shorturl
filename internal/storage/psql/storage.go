@@ -1,9 +1,11 @@
 package psql
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/Xrefullx/golang-shorturl/internal/storage"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -18,11 +20,15 @@ type Storage struct {
 	userRepo     *userRepository
 	db           *sql.DB
 	conStringDSN string
+
+	wg                *sync.WaitGroup // wait group for async tasks
+	storageAsyncEnded chan struct{}
+	urlAsyncEnded     chan struct{}
+	waitAsyncEnd      bool
 }
 
 // NewStorage inits new connection to psql storage.
-// !!!! On init drop all and init tables.
-func NewStorage(conStringDSN string) (*Storage, error) {
+func NewStorage(ctx context.Context, asyncEndedChan chan struct{}, conStringDSN string) (*Storage, error) {
 	if conStringDSN == "" {
 		return nil, fmt.Errorf("ошибка инициализации бд:%v", "строка соединения с бд пуста")
 	}
@@ -44,10 +50,27 @@ func NewStorage(conStringDSN string) (*Storage, error) {
 		conStringDSN: conStringDSN,
 	}
 
-	st.shortURLRepo = newShortURLRepository(db)
+	st.shortURLRepo = newShortURLRepository(ctx, db, st.urlAsyncEnded)
 	st.userRepo = newUserRepository(db)
 
+	st.runWaiterAsyncEnded()
 	return st, nil
+}
+
+// WaitAsyncTasksEnded returns true if on shutting down we must wait async tasks ended
+func (s *Storage) WaitAsyncTasksEnded() bool {
+	return s.waitAsyncEnd
+}
+
+func (s *Storage) runWaiterAsyncEnded() {
+	go func() {
+		//  wait url repository async tasks ended
+		<-s.urlAsyncEnded
+
+		fmt.Println("storage async tasks ended")
+
+		s.storageAsyncEnded <- struct{}{}
+	}()
 }
 
 // URL returns urls repository.
