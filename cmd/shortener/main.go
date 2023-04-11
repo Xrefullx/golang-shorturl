@@ -52,6 +52,7 @@ func main() {
 
 	go func() {
 		if err := server.RunHTTP(); err != nil {
+			log.Fatal(err.Error())
 		}
 	}()
 
@@ -64,6 +65,8 @@ func main() {
 	if err := server.ShutdownHTTP(ctx); err != nil {
 		log.Fatalf("error shutdown server: %s\n", err.Error())
 	}
+
+	server.ShutdownGRPC()
 
 	// waiting if db must wait ending of async tasks
 	if db.WaitAsyncTasksEnded() {
