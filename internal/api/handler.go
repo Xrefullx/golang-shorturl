@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/Xrefullx/golang-shorturl/internal/model"
@@ -190,7 +190,7 @@ func (h *Handler) GetUserUrls(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SaveURLJSONHandler(w http.ResponseWriter, r *http.Request) {
 	// read incoming ShortenRequest
 
-	jsBody, err := ioutil.ReadAll(r.Body)
+	jsBody, err := io.ReadAll(r.Body)
 	if err != nil {
 		h.badRequestError(w, err.Error())
 		return
@@ -248,7 +248,7 @@ func (h *Handler) SaveURLJSONHandler(w http.ResponseWriter, r *http.Request) {
 // Return status 409 and stored short url in text format, if url is exist in db.
 func (h *Handler) SaveURLHandler(w http.ResponseWriter, r *http.Request) {
 	// read incoming URL
-	srcURL, err := ioutil.ReadAll(r.Body)
+	srcURL, err := io.ReadAll(r.Body)
 	if err != nil {
 		h.serverError(w, err.Error())
 		return
