@@ -27,6 +27,11 @@ func NewUserService(db storage.Storage) (*UserService, error) {
 	}, nil
 }
 
+// GetCount returns count of stored users.
+func (u *UserService) GetCount() (int, error) {
+	return u.db.User().GetCount()
+}
+
 // Exist checks user is exist, by user id.
 func (u *UserService) Exist(ctx context.Context, id uuid.UUID) (bool, error) {
 	if id == uuid.Nil {
