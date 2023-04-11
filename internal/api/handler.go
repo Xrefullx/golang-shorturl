@@ -4,28 +4,61 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
+	"net/http"
+
 	"github.com/Xrefullx/golang-shorturl/internal/model"
 	"github.com/Xrefullx/golang-shorturl/internal/service"
 	"github.com/Xrefullx/golang-shorturl/internal/shterrors"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"io"
-	"net/http"
 )
 
 type Handler struct {
 	auth    Auth
 	svc     service.URLShortener
 	baseURL string
+	subnet  *Subnet
 }
 
 // NewHandler init new handler object and return pointer.
-func NewHandler(shtSvc service.URLShortener, authSvc service.UserManager, baseURL string) (*Handler, error) {
+func NewHandler(shtSvc service.URLShortener, authSvc service.UserManager, baseURL string, network string) (*Handler, error) {
 	return &Handler{
 		svc:     shtSvc,
 		baseURL: baseURL,
 		auth:    NewAuth(authSvc),
+		subnet:  NewSubnet(network),
 	}, nil
+}
+
+// Stats stats of stored users and not deleted urls.
+// Return status 200 and stats respone.
+// Return status 403 if екгыеув subnet not given, or request subnet not trusted.
+func (h *Handler) Stats(w http.ResponseWriter, r *http.Request) {
+	urls, err := h.svc.GetCount()
+	if err != nil {
+		h.serverError(w, err.Error())
+	}
+
+	users, err := h.auth.Svc.GetCount()
+	if err != nil {
+		h.serverError(w, err.Error())
+	}
+
+	resp := StatsResponse{
+		Urls:  urls,
+		Users: users,
+	}
+
+	jsResult, err := json.Marshal(resp)
+	if err != nil {
+		h.serverError(w, err.Error())
+		return
+	}
+
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(jsResult))
 }
 
 // Ping handler check db connection.
@@ -90,7 +123,8 @@ func (h *Handler) SaveBatch(w http.ResponseWriter, r *http.Request) {
 	userID := h.getUserIDFromContext(r)
 
 	//  save mp to db, values in map updates to shortURL
-	if err := h.svc.SaveURLList(listToAdd, userID); err != nil {
+	savedUrls, err := h.svc.SaveURLList(listToAdd, userID)
+	if err != nil {
 		h.serverError(w, err.Error())
 
 		return
@@ -100,7 +134,7 @@ func (h *Handler) SaveBatch(w http.ResponseWriter, r *http.Request) {
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetIndent("", "   ")
-	if err := encoder.Encode(NewBatchListResponseFromMap(listToAdd, h.baseURL)); err != nil {
+	if err := encoder.Encode(NewBatchListResponseFromMap(savedUrls, h.baseURL)); err != nil {
 		h.serverError(w, err.Error())
 
 		return
@@ -156,7 +190,7 @@ func (h *Handler) GetUserUrls(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SaveURLJSONHandler(w http.ResponseWriter, r *http.Request) {
 	// read incoming ShortenRequest
 
-	jsBody, err := io.ReadAll(r.Body)
+	jsBody, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		h.badRequestError(w, err.Error())
 		return
@@ -214,7 +248,7 @@ func (h *Handler) SaveURLJSONHandler(w http.ResponseWriter, r *http.Request) {
 // Return status 409 and stored short url in text format, if url is exist in db.
 func (h *Handler) SaveURLHandler(w http.ResponseWriter, r *http.Request) {
 	// read incoming URL
-	srcURL, err := io.ReadAll(r.Body)
+	srcURL, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		h.serverError(w, err.Error())
 		return

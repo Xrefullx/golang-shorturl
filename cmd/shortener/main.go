@@ -45,8 +45,13 @@ func main() {
 	}
 
 	go func() {
-		if err := server.Run(); err != nil {
+		if err := server.RunGRPC(); err != nil {
 			log.Fatal(err.Error())
+		}
+	}()
+
+	go func() {
+		if err := server.RunHTTP(); err != nil {
 		}
 	}()
 
@@ -56,7 +61,7 @@ func main() {
 	<-sigc
 	log.Println("accepted sigint, shutting down")
 
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.ShutdownHTTP(ctx); err != nil {
 		log.Fatalf("error shutdown server: %s\n", err.Error())
 	}
 

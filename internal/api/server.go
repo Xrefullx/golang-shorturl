@@ -4,16 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-
 	"github.com/Xrefullx/golang-shorturl/internal/service"
 	"github.com/Xrefullx/golang-shorturl/internal/storage"
 	"github.com/Xrefullx/golang-shorturl/pkg"
+	"google.golang.org/grpc"
+	"net"
+	"net/http"
 )
 
 // Server implements http server
 type Server struct {
 	httpServer http.Server
+	grpcServer *grpc.Server
 	cfg        *pkg.Config
 }
 
@@ -31,23 +33,37 @@ func NewServer(cfg *pkg.Config, db storage.Storage) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ошибка инициализации handler:%w", err)
 	}
-	handler, err := NewHandler(svcSht, svcUser, cfg.BaseURL)
+
+	handler, err := NewHandler(svcSht, svcUser, cfg.BaseURL, cfg.TrustedSubnet)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка инициализации handler:%w", err)
 	}
-	//http.ListenAndServeTLS или tls.Listen.
+
+	grpcServer := grpc.NewServer()
+
 	return &Server{
 		httpServer: http.Server{
 			Addr:    cfg.ServerPort,
 			Handler: NewRouter(handler, cfg.Debug),
 		},
-		cfg: cfg,
+		grpcServer: grpcServer,
+		cfg:        cfg,
 	}, nil
+}
+
+// Run starts GRPC server
+func (s *Server) RunGRPC() error {
+	listen, err := net.Listen("tcp", ":3201")
+	if err != nil {
+		return err
+	}
+
+	return s.grpcServer.Serve(listen)
 }
 
 // Run starts http server
 // if config EnableHTTPS true runs in HTTPS mode
-func (s *Server) Run() error {
+func (s *Server) RunHTTP() error {
 	if s.cfg.EnableHTTPS {
 		certPath, keyPath, err := pkg.GetCertX509Files()
 		if err != nil {
@@ -69,6 +85,11 @@ func handleServerCloseErr(err error) error {
 }
 
 // Shutdown sutdown http server
-func (s *Server) Shutdown(ctx context.Context) error {
+func (s *Server) ShutdownHTTP(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
+}
+
+// Shutdown sutdown http server
+func (s *Server) ShutdownGRPC() {
+	s.grpcServer.GracefulStop()
 }

@@ -13,7 +13,7 @@ type (
 	//  Auth implements user authorisation
 	Auth struct {
 		crypt AuthCrypt
-		svc   service.UserManager
+		Svc   service.UserManager
 	}
 	contextKey string
 )
@@ -25,10 +25,10 @@ var (
 // NewAuth activates new Auth.
 // Using UserManager service for accessing to storage.
 // And crypto tool s from AuthCrypt
-func NewAuth(svc service.UserManager) Auth {
+func NewAuth(Svc service.UserManager) Auth {
 	return Auth{
 		crypt: *NewAuthCrypt(),
-		svc:   svc,
+		Svc:   Svc,
 	}
 }
 
@@ -59,7 +59,7 @@ func (a *Auth) authUser(w http.ResponseWriter, r *http.Request) (uuid.UUID, erro
 		}
 
 		//  check user
-		exist, err := a.svc.Exist(r.Context(), id)
+		exist, err := a.Svc.Exist(r.Context(), id)
 		if err != nil {
 			return uuid.Nil, fmt.Errorf("ошибка установки ключа пользователя:%w", err)
 		}
@@ -88,7 +88,7 @@ func (a *Auth) authUser(w http.ResponseWriter, r *http.Request) (uuid.UUID, erro
 
 // newUser adds new user, return UUID and token
 func (a *Auth) newUser(ctx context.Context) (uuid.UUID, string, error) {
-	newUser, err := a.svc.AddUser(ctx)
+	newUser, err := a.Svc.AddUser(ctx)
 	if err == nil {
 		token, err := a.crypt.EncodeUUID(newUser.ID)
 		if err == nil {
